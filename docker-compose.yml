@@ -84,7 +84,7 @@ services:
       # Soporte para Supavisor
       - ./db/pooler.sql:/docker-entrypoint-initdb.d/migrations/99-pooler.sql:Z
       # Configuración persistente de Supabase
-      - db-config:/etc/postgresql-custom
+      - ./db/db-config:/etc/postgresql-custom
       # Logs y webhooks opcionales
       - ./db/logs.sql:/docker-entrypoint-initdb.d/migrations/99-logs.sql:Z
       - ./db/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:Z
