@@ -1,0 +1,344 @@
+# Usage
+#   Start:              docker compose up
+#   Stop:               docker compose down
+
+version: "1.0"
+
+name: supabase
+
+services:
+
+  # ======================================================================
+  # Supabase Studio — Dashboard de administración
+  # ======================================================================
+  studio:
+    container_name: supabase-studio
+    image: supabase/studio:latest
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://studio:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"
+        ]
+      timeout: 10s
+      interval: 5s
+      retries: 3
+    depends_on:
+      analytics:
+        condition: service_healthy
+    environment:
+      # Binds nestjs listener to both IPv4 and IPv6 network interfaces
+      HOSTNAME: "::"
+
+      STUDIO_PG_META_URL: http://meta:8080
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PG_META_CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
+
+      DEFAULT_ORGANIZATION_NAME: ${STUDIO_DEFAULT_ORGANIZATION}
+      DEFAULT_PROJECT_NAME: ${STUDIO_DEFAULT_PROJECT}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+
+      SUPABASE_URL: http://auth:9999
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+
+      # LOGFLARE_API_KEY is deprecated
+      LOGFLARE_API_KEY: ${LOGFLARE_PUBLIC_ACCESS_TOKEN}
+      LOGFLARE_PUBLIC_ACCESS_TOKEN: ${LOGFLARE_PUBLIC_ACCESS_TOKEN}
+      LOGFLARE_PRIVATE_ACCESS_TOKEN: ${LOGFLARE_PRIVATE_ACCESS_TOKEN}
+
+      LOGFLARE_URL: http://analytics:4000
+      NEXT_PUBLIC_ENABLE_LOGS: true
+      # Comment to use Big Query backend for analytics
+      NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
+      # Uncomment to use Big Query backend for analytics
+      # NEXT_ANALYTICS_BACKEND_PROVIDER: bigquery
+
+
+  # ======================================================================
+  # PostgreSQL + PostGIS — Base de datos principal
+  # ======================================================================
+  db:
+    container_name: supabase-db
+    image: postgis/postgis:17-master
+    restart: unless-stopped
+    hostname: db
+    volumes:
+      # PGDATA con tus datos actuales
+      - ./db/data:/var/lib/postgresql/data:Z
+      - ./db/init:/docker-entrypoint-initdb.d
+      # Roles de Supabase
+      - ./volumes/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
+      # JWT secret
+      - ./volumes/db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:Z
+      # Tablas internas de Supabase (_supabase)
+      - ./volumes/db/_supabase.sql:/docker-entrypoint-initdb.d/migrations/97-_supabase.sql:Z
+      # Soporte para Supavisor
+      - ./volumes/db/pooler.sql:/docker-entrypoint-initdb.d/migrations/99-pooler.sql:Z
+      # Configuración persistente de Supabase
+      - db-config:/etc/postgresql-custom
+      # Logs y webhooks opcionales
+      - ./volumes/db/logs.sql:/docker-entrypoint-initdb.d/migrations/99-logs.sql:Z
+      - ./volumes/db/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:Z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    environment:
+      POSTGRES_HOST: db
+      PGPORT: ${POSTGRES_PORT}          # puerto del contenedor
+      POSTGRES_PORT: ${POSTGRES_PORT}   # puerto del contenedor
+      POSTGRES_USER: ${POSTGRES_USER}      # usuario principal
+      PGPASSWORD: ${POSTGRES_PASSWORD}          # contraseña
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}   # contraseña
+      PGDATABASE: ${POSTGRES_DB}        # nombre DB
+      POSTGRES_DB: ${POSTGRES_DB}       # nombre DB
+      JWT_SECRET: ${JWT_SECRET}            # solo si usas JWT con Supavisor
+      JWT_EXP: ${JWT_EXPIRY}               # opcional, expiración JWT
+    command:
+      [
+        "postgres",
+        "-c",
+        "config_file=/etc/postgresql/postgresql.conf",
+        "-c",
+        "log_min_messages=fatal" # previene la saturación de consultas en los logs
+      ]
+
+  # ======================================================================
+  # Meta API — Gestión de metadata de Supabase
+  # ======================================================================
+  meta:
+    container_name: supabase-meta
+    image: supabase/postgres-meta:v0.95.2
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      analytics:
+        condition: service_healthy
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: ${POSTGRES_PORT}
+      PG_META_DB_NAME: ${POSTGRES_DB}
+      PG_META_DB_USER: supabase_admin # TODO
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      CRYPTO_KEY: ${PG_META_CRYPTO_KEY} # TODO
+
+  # ======================================================================
+  # Auth (GoTrue) — Autenticación y JWT
+  # ======================================================================
+  auth:
+    container_name: supabase-auth
+    image: supabase/gotrue:v2.186.0-rc.5
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:9999/health"
+        ]
+      timeout: 5s
+      interval: 5s
+      retries: 3
+    depends_on:
+      db:
+        condition: service_healthy
+      analytics:
+        condition: service_healthy
+    environment:
+      # API Host y puerto internos del contenedor
+      GOTRUE_API_HOST: 0.0.0.0           # Escucha en todas las interfaces dentro del contenedor
+      GOTRUE_API_PORT: 9999              # Puerto interno de GoTrue
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL} # URL que usaría tu backend si es necesario
+
+      # Base de datos donde se almacenan usuarios y tokens
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB} 
+      # - db: hostname del contenedor de PostGIS
+      # - supabase_auth_admin: usuario con privilegios para manejar auth
+      # - POSTGRES_PASSWORD y POSTGRES_DB: del .env
+
+      # URLs y redirecciones
+      GOTRUE_SITE_URL: ${SITE_URL}                    # URL base de tu app/web para callbacks
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS} # URLs permitidas para OAuth y redirecciones
+
+      # JWT y roles
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}               # JWT secreto compartido
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY}                 # Expiración de tokens
+      GOTRUE_JWT_ADMIN_ROLES: service_role          # Roles que pueden hacer operaciones administrativas
+      GOTRUE_JWT_AUD: authenticated                 # Audiencia default
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated # Grupo default para usuarios
+
+      # Login por correo/contraseña   
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: true           # Permite registro con email
+      GOTRUE_MAILER_AUTOCONFIRM: false              # Envía email de confirmación automáticamente
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: false # No permitir usuarios anónimos
+      GOTRUE_DISABLE_SIGNUP: false                  # Permite nuevos registros
+
+      # Google Sign-In (OAuth)    
+      GOTRUE_EXTERNAL_PROVIDER: google
+      GOTRUE_EXTERNAL_GOOGLE_ENABLED: true
+      GOTRUE_OAUTH_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOTRUE_OAUTH_GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+
+      # Configuración de correo (mailer) - necesario para confirmar email
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL}       # Email del administrador
+      GOTRUE_SMTP_HOST: ${SMTP_HOST}                     # Host SMTP
+      GOTRUE_SMTP_PORT: ${SMTP_PORT}                     # Puerto SMTP
+      GOTRUE_SMTP_USER: ${SMTP_USER}                     # Usuario SMTP
+      GOTRUE_SMTP_PASS: ${SMTP_PASS}                     # Contraseña SMTP
+      GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME}       # Nombre remitente
+      GOTRUE_MAILER_URLPATHS_INVITE: /invite
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /confirm       # Ruta para confirmación de email
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /recovery         # Solo si quieres permitir recuperar contraseña
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /email-change # Solo si permites cambio de email
+
+  # ======================================================================
+  # Storage — Almacenamiento de archivos (opcional)
+  # ======================================================================
+  storage:
+    container_name: supabase-storage
+    image: supabase/storage-api:latest
+    restart: unless-stopped
+    volumes:
+      - ./storage/files:/var/lib/storage:z
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://storage:5000/status"
+        ]
+      timeout: 5s
+      interval: 5s
+      retries: 3
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ANON_KEY: ${ANON_KEY}                   # Clave pública para accesos anónimos si quieres
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}        # Clave de servicio con permisos completos
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
+      REQUEST_ALLOW_X_FORWARDED_PATH: "true" # Permite rutas proxy, útil si lo expones detrás de Cloudflare Tunnel
+      FILE_SIZE_LIMIT: 52428800              # Tamaño máximo de archivos en bytes (50MB)
+      STORAGE_BACKEND: file                   # Usamos almacenamiento local en disco
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub                         # Obligatorio, aunque solo uses un tenant
+      REGION: stub                            # Obligatorio, aunque solo uses un tenant
+      GLOBAL_S3_BUCKET: stub                  # Obligatorio, aunque uses almacenamiento local
+
+
+  # ======================================================================
+  # Analytics — Logging y métricas
+  # ======================================================================
+  analytics:
+    container_name: supabase-analytics
+    image: supabase/logflare:latest
+    restart: unless-stopped
+    ports:
+      - 4000:4000
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "http://localhost:4000/health"
+        ]
+      timeout: 5s
+      interval: 5s
+      retries: 10
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./analytics:/opt/app/rel/logflare/data
+    environment:
+      DB_USERNAME: supabase_admin           # Usuario de la BD con acceso a _analytics
+      DB_PASSWORD: ${POSTGRES_PASSWORD}     # Contraseña
+      DB_DATABASE: _supabase                # BD donde Logflare guarda los datos
+      DB_HOSTNAME: db                       # Host del contenedor de PostGIS
+      DB_PORT: ${POSTGRES_PORT}             # Puerto del contenedor de PostGIS
+      DB_SCHEMA: _analytics                 # Esquema donde se guardan las tablas de analytics
+      POSTGRES_BACKEND_URL: postgresql://supabase_admin:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/_supabase
+      POSTGRES_BACKEND_SCHEMA: _analytics
+
+      LOGFLARE_PUBLIC_ACCESS_TOKEN: ${LOGFLARE_PUBLIC_ACCESS_TOKEN}    # UI pública (opcional)
+      LOGFLARE_PRIVATE_ACCESS_TOKEN: ${LOGFLARE_PRIVATE_ACCESS_TOKEN}  # Token de administración
+      LOGFLARE_SINGLE_TENANT: true                                      # Solo un tenant (tu setup)
+      LOGFLARE_SUPABASE_MODE: true                                       # Modo Supabase
+      LOGFLARE_FEATURE_FLAG_OVERRIDE: multibackend=true                  # Multi-backend activado
+
+
+
+  # ======================================================================
+  # Supavisor — Pooler / Proxy de conexiones
+  # ======================================================================
+  supavisor:
+    container_name: supabase-supavisor
+    image: supabase/supavisor:2.7.4
+    restart: unless-stopped
+    ports:
+      - ${POSTGRES_PORT}:5432
+      - ${POOLER_PROXY_PORT_TRANSACTION}:6543
+    volumes:
+      - ./supavisor/pooler.exs:/etc/pooler/pooler.exs:ro,z
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-sSfL",
+          "--head",
+          "-o",
+          "/dev/null",
+          "http://127.0.0.1:4000/api/health"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      db:
+        condition: service_healthy
+      analytics:
+        condition: service_healthy
+    environment:
+      PORT: 4000
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_URL: ecto://supabase_admin:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/_supabase
+      CLUSTER_POSTGRES: true
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      VAULT_ENC_KEY: ${VAULT_ENC_KEY}
+      API_JWT_SECRET: ${JWT_SECRET}
+      METRICS_JWT_SECRET: ${JWT_SECRET}
+      REGION: local
+      ERL_AFLAGS: -proto_dist inet_tcp
+      POOLER_TENANT_ID: ${POOLER_TENANT_ID}
+      POOLER_DEFAULT_POOL_SIZE: ${POOLER_DEFAULT_POOL_SIZE}
+      POOLER_MAX_CLIENT_CONN: ${POOLER_MAX_CLIENT_CONN}
+      POOLER_POOL_MODE: transaction
+      DB_POOL_SIZE: ${POOLER_DB_POOL_SIZE}
+    command:
+      [
+        "/bin/sh",
+        "-c",
+        "/app/bin/migrate && /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\" && /app/bin/server"
+      ]
