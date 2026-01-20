@@ -2,7 +2,7 @@
 #   Start:              docker compose up
 #   Stop:               docker compose down
 
-version: "1.0"
+version: "3.9"
 
 name: supabase
 
@@ -15,6 +15,8 @@ services:
     container_name: supabase-studio
     image: supabase/studio:latest
     restart: unless-stopped
+    ports:
+      - ${STUDIO_PORT:-3000}:3000
     healthcheck:
       test:
         [
@@ -76,18 +78,18 @@ services:
       - ./db/data:/var/lib/postgresql/data:Z
       - ./db/init:/docker-entrypoint-initdb.d
       # Roles de Supabase
-      - ./volumes/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
+      - ./db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
       # JWT secret
-      - ./volumes/db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:Z
+      - ./db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:Z
       # Tablas internas de Supabase (_supabase)
-      - ./volumes/db/_supabase.sql:/docker-entrypoint-initdb.d/migrations/97-_supabase.sql:Z
+      - ./db/_supabase.sql:/docker-entrypoint-initdb.d/migrations/97-_supabase.sql:Z
       # Soporte para Supavisor
-      - ./volumes/db/pooler.sql:/docker-entrypoint-initdb.d/migrations/99-pooler.sql:Z
+      - ./db/pooler.sql:/docker-entrypoint-initdb.d/migrations/99-pooler.sql:Z
       # Configuración persistente de Supabase
       - db-config:/etc/postgresql-custom
       # Logs y webhooks opcionales
-      - ./volumes/db/logs.sql:/docker-entrypoint-initdb.d/migrations/99-logs.sql:Z
-      - ./volumes/db/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:Z
+      - ./db/logs.sql:/docker-entrypoint-initdb.d/migrations/99-logs.sql:Z
+      - ./db/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:Z
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h localhost"]
       interval: 5s
