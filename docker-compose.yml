@@ -56,7 +56,7 @@ services:
       LOGFLARE_PRIVATE_ACCESS_TOKEN: ${LOGFLARE_PRIVATE_ACCESS_TOKEN}
 
       LOGFLARE_URL: http://analytics:4000
-      NEXT_PUBLIC_ENABLE_LOGS: true
+      NEXT_PUBLIC_ENABLE_LOGS: "true"
       # Comment to use Big Query backend for analytics
       NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
       # Uncomment to use Big Query backend for analytics
@@ -184,14 +184,14 @@ services:
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated # Grupo default para usuarios
 
       # Login por correo/contraseña   
-      GOTRUE_EXTERNAL_EMAIL_ENABLED: true           # Permite registro con email
-      GOTRUE_MAILER_AUTOCONFIRM: false              # Envía email de confirmación automáticamente
-      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: false # No permitir usuarios anónimos
-      GOTRUE_DISABLE_SIGNUP: false                  # Permite nuevos registros
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"           # Permite registro con email
+      GOTRUE_MAILER_AUTOCONFIRM: "false"              # Envía email de confirmación automáticamente
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false" # No permitir usuarios anónimos
+      GOTRUE_DISABLE_SIGNUP: "false"                  # Permite nuevos registros
 
       # Google Sign-In (OAuth)    
       GOTRUE_EXTERNAL_PROVIDER: google
-      GOTRUE_EXTERNAL_GOOGLE_ENABLED: true
+      GOTRUE_EXTERNAL_GOOGLE_ENABLED: "true"
       GOTRUE_OAUTH_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOTRUE_OAUTH_GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
 
@@ -281,8 +281,8 @@ services:
 
       LOGFLARE_PUBLIC_ACCESS_TOKEN: ${LOGFLARE_PUBLIC_ACCESS_TOKEN}    # UI pública (opcional)
       LOGFLARE_PRIVATE_ACCESS_TOKEN: ${LOGFLARE_PRIVATE_ACCESS_TOKEN}  # Token de administración
-      LOGFLARE_SINGLE_TENANT: true                                      # Solo un tenant (tu setup)
-      LOGFLARE_SUPABASE_MODE: true                                       # Modo Supabase
+      LOGFLARE_SINGLE_TENANT: "true"                                      # Solo un tenant (tu setup)
+      LOGFLARE_SUPABASE_MODE: "true"                                       # Modo Supabase
       LOGFLARE_FEATURE_FLAG_OVERRIDE: multibackend=true                  # Multi-backend activado
 
 
@@ -324,7 +324,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       DATABASE_URL: ecto://supabase_admin:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/_supabase
-      CLUSTER_POSTGRES: true
+      CLUSTER_POSTGRES: "true"
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
       VAULT_ENC_KEY: ${VAULT_ENC_KEY}
       API_JWT_SECRET: ${JWT_SECRET}
