@@ -84,7 +84,7 @@ services:
       # Soporte para Supavisor
       - ./db/pooler.sql:/docker-entrypoint-initdb.d/migrations/99-pooler.sql:Z
       # Configuración persistente de Supabase
-      - ./db/db-config:/etc/postgresql-custom
+      - db-config:/etc/postgresql-custom
       # Logs y webhooks opcionales
       - ./db/logs.sql:/docker-entrypoint-initdb.d/migrations/99-logs.sql:Z
       - ./db/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:Z
@@ -235,6 +235,7 @@ services:
     environment:
       ANON_KEY: ${ANON_KEY}                   # Clave pública para accesos anónimos si quieres
       SERVICE_KEY: ${SERVICE_ROLE_KEY}        # Clave de servicio con permisos completos
+      PGRST_JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
       REQUEST_ALLOW_X_FORWARDED_PATH: "true" # Permite rutas proxy, útil si lo expones detrás de Cloudflare Tunnel
       FILE_SIZE_LIMIT: 52428800              # Tamaño máximo de archivos en bytes (50MB)
@@ -342,3 +343,6 @@ services:
         "-c",
         "/app/bin/migrate && /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\" && /app/bin/server"
       ]
+
+volumes:
+  db-config:
