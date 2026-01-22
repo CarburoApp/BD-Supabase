@@ -23,5 +23,5 @@
 \set jwt_exp `echo "$JWT_EXP"`
 \set target_db `echo "$POSTGRES_DB"`
 
-ALTER DATABASE :'target_db' SET "app.settings.jwt_secret" TO :'jwt_secret';
-ALTER DATABASE :'target_db' SET "app.settings.jwt_exp" TO :'jwt_exp';
+ALTER DATABASE :target_db SET "app.settings.jwt_secret" TO :'jwt_secret';
+ALTER DATABASE :target_db SET "app.settings.jwt_exp" TO :'jwt_exp';
