@@ -125,9 +125,9 @@ services:
       PG_META_DB_HOST: db
       PG_META_DB_PORT: ${POSTGRES_PORT}
       PG_META_DB_NAME: ${POSTGRES_DB}
-      PG_META_DB_USER: supabase_admin # TODO
+      PG_META_DB_USER: ${POSTGRES_USER}
       PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
-      CRYPTO_KEY: ${PG_META_CRYPTO_KEY} # TODO
+      CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
 
   # ======================================================================
   # Auth (GoTrue) — Autenticación y JWT
@@ -136,6 +136,8 @@ services:
     container_name: supabase-auth
     image: supabase/gotrue:v2.186.0-rc.5
     restart: unless-stopped
+    ports:
+      - ${POSTGRES_AUTH_PORT_EXT}:9999
     healthcheck:
       test:
         [
