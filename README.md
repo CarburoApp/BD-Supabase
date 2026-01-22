@@ -13,7 +13,7 @@ El sistema se basa en **Supabase**, que proporciona un ecosistema completo de **
 |----------------------|---------------------------------|----------------------------------------------------------------|-------------------------------|
 | `supabase-db`        | `supabase/postgres:15.8.1.085`  | Base de datos principal con **PostGIS**                        | `${POSTGRES_PORT_EXT:-5432}`|
 | `supabase-studio`    | `supabase/studio:latest`        | Dashboard de administración visual                              | `${STUDIO_PORT:-54232}`      |
-| `supabase-auth`      | `supabase/gotrue:v2.186.0-rc.5`| Autenticación y gestión de JWT                                  | Interno: 9999               |
+| `supabase-auth`      | `supabase/gotrue:v2.186.0-rc.5`| Autenticación y gestión de JWT                                  | `${POSTGRES_AUTH_PORT_EXT:-9999}`               |
 | `supabase-meta`      | `supabase/postgres-meta:v0.95.2`| Gestión de metadata de Supabase                                 | Interno: 8080               |
 | `supabase-storage`   | `supabase/storage-api:latest`    | Almacenamiento de archivos (local / multi-tenant)              | Interno: 5000               |
 | `supabase-analytics` | `supabase/logflare:latest`       | Logging y métricas de analytics                                 | 4000                         |
@@ -39,7 +39,7 @@ El sistema se basa en **Supabase**, que proporciona un ecosistema completo de **
 
 ### Auth (GoTrue)
 - Gestiona usuarios, JWT, OAuth (Google) y correos.  
-- Puerto interno: 9999  
+- Puerto expuesto: `${POSTGRES_AUTH_PORT_EXT:-9999}`
 - Integración SMTP configurada con Zoho Mail para envíos:  
   - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` definidos en `.env`.  
 
