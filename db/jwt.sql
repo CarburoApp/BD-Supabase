@@ -15,8 +15,13 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 -- ---------------------------------------------------------------------
+
+-- Actualización propia, tomamos la BD que definimos nosotros, no
+--  postgres que sería la por defecto en caso de no definirla.
+
 \set jwt_secret `echo "$JWT_SECRET"`
 \set jwt_exp `echo "$JWT_EXP"`
+\set target_db `echo "$POSTGRES_DB"`
 
-ALTER DATABASE postgres SET "app.settings.jwt_secret" TO :'jwt_secret';
-ALTER DATABASE postgres SET "app.settings.jwt_exp" TO :'jwt_exp';
+ALTER DATABASE :'target_db' SET "app.settings.jwt_secret" TO :'jwt_secret';
+ALTER DATABASE :'target_db' SET "app.settings.jwt_exp" TO :'jwt_exp';

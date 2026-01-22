@@ -68,33 +68,34 @@ services:
   # ======================================================================
   db:
     container_name: supabase-db
-    image: postgis/postgis:17-master
+    image: supabase/postgres:15.8.1.085 # mejora proxima17.6.1.072
     restart: unless-stopped
     hostname: db
     volumes:
+      # Must be superuser to create event trigger
+      - ./db/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:Z
+      # Must be superuser to alter reserved role
+      - ./db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
+      # Initialize the database settings with JWT_SECRET and JWT_EXP
+      - ./db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:Z
       # PGDATA con tus datos actuales
       - ./db/data:/var/lib/postgresql/data:Z
-      - ./db/init:/docker-entrypoint-initdb.d
-      # Roles de Supabase
-      - ./db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
-      # JWT secret
-      - ./db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:Z
-      # Tablas internas de Supabase (_supabase)
+      # Changes required for internal supabase data such as _analytics
       - ./db/_supabase.sql:/docker-entrypoint-initdb.d/migrations/97-_supabase.sql:Z
-      # Soporte para Supavisor
+      # Changes required for Analytics support
+      - ./db/logs.sql:/docker-entrypoint-initdb.d/migrations/99-logs.sql:Z
+      # Changes required for Pooler support
       - ./db/pooler.sql:/docker-entrypoint-initdb.d/migrations/99-pooler.sql:Z
+
       # Configuración persistente de Supabase
       - db-config:/etc/postgresql-custom
-      # Logs y webhooks opcionales
-      - ./db/logs.sql:/docker-entrypoint-initdb.d/migrations/99-logs.sql:Z
-      - ./db/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:Z
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h localhost"]
       interval: 5s
       timeout: 5s
       retries: 10
     environment:
-      POSTGRES_HOST: db
+      POSTGRES_HOST: /var/run/postgresql
       PGPORT: ${POSTGRES_PORT}          # puerto del contenedor
       POSTGRES_PORT: ${POSTGRES_PORT}   # puerto del contenedor
       POSTGRES_USER: ${POSTGRES_USER}      # usuario principal
@@ -104,14 +105,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}       # nombre DB
       JWT_SECRET: ${JWT_SECRET}            # solo si usas JWT con Supavisor
       JWT_EXP: ${JWT_EXPIRY}               # opcional, expiración JWT
-    command:
-      [
-        "postgres",
-        "-c",
-        "config_file=/etc/postgresql/postgresql.conf",
-        "-c",
-        "log_min_messages=fatal" # previene la saturación de consultas en los logs
-      ]
 
   # ======================================================================
   # Meta API — Gestión de metadata de Supabase
@@ -167,7 +160,7 @@ services:
 
       # Base de datos donde se almacenan usuarios y tokens
       GOTRUE_DB_DRIVER: postgres
-      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB} 
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
       # - db: hostname del contenedor de PostGIS
       # - supabase_auth_admin: usuario con privilegios para manejar auth
       # - POSTGRES_PASSWORD y POSTGRES_DB: del .env
@@ -183,13 +176,13 @@ services:
       GOTRUE_JWT_AUD: authenticated                 # Audiencia default
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated # Grupo default para usuarios
 
-      # Login por correo/contraseña   
+      # Login por correo/contraseña
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"           # Permite registro con email
       GOTRUE_MAILER_AUTOCONFIRM: "false"              # Envía email de confirmación automáticamente
       GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false" # No permitir usuarios anónimos
       GOTRUE_DISABLE_SIGNUP: "false"                  # Permite nuevos registros
 
-      # Google Sign-In (OAuth)    
+      # Google Sign-In (OAuth)
       GOTRUE_EXTERNAL_PROVIDER: google
       GOTRUE_EXTERNAL_GOOGLE_ENABLED: "true"
       GOTRUE_OAUTH_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
